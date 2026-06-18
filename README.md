@@ -1,159 +1,172 @@
-# WA Bot Assistant (@aii)
-
-Bot WhatsApp untuk grup yang bisa mencatat, manage task ClickUp, dan bales otomatis kalau di-mention `@aii`.
-
-## Arsitektur
-
+# Gateway Wa with Hermes
 ```
-WhatsApp ←→ bridge.js (Node.js, always-on)
-                ↕ (inbox.json / outbox.json)
-            wa_processor.py (Python, cron job tiap 1-2 menit)
-```
-
-- **bridge.js** — Listener WA via Puppeteer + whatsapp-web.js. Nangkep pesan yang mention `@aii` di grup, tulis ke `inbox.json`. Polling `outbox.json` tiap 3 detik buat kirim reply.
-- **wa_processor.py** — Baca inbox, proses command, tulis reply ke outbox. Dijalankan via cron job.
-
-## Prerequisites
-
-- **Node.js** >= 18
-- **Python** >= 3.8
-- **Chromium** / Google Chrome (untuk Puppeteer)
-- **tmux** (opsional, buat jalanin bridge di background)
-
-## Install
-
-### 1. Clone & Install Dependencies
-
-```bash
-git clone <repo-url>
-cd waBotAssistant
-npm install
-```
-
-### 2. Setup Chromium Path
-
-Bridge butuh path ke Chromium. Set environment variable:
-
-```bash
-export CHROME_PATH="/path/to/chromium"
-```
-
-Contoh lokasi umum:
-- Linux: `/usr/bin/chromium-browser` atau `/usr/bin/google-chrome`
-- WSL + Playwright: `~/.cache/ms-playwright/chromium-XXXX/chrome-linux64/chrome`
-- macOS: `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
-
-Kalau gak di-set, default-nya pakai path dari Hermes profile.
-
-### 3. Setup Queue Directory
-
-Buat folder queue (otomatis dibuat pas bridge pertama kali jalan):
-
-```bash
-mkdir -p ~/.hermes/profiles/sekkha_puggala/wa_queue
-```
-
-### 4. Setup Config (Opsional — untuk ClickUp)
-
-Buat file `~/.hermes/profiles/sekkha_puggala/wa_queue/config.json`:
-
-```json
-{
-  "clickup_token": "pk_YOUR_TOKEN_HERE",
-  "clickup_team_id": "YOUR_TEAM_ID",
-  "bot_name": "@aii"
-}
+┌─────────────────────────────────────────────────────────┐
+│                      WA Number (Bot)                       │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+                     whatsapp-web.js
+                    (session via LocalAuth)
+                            │
+              ┌─────────────┴──────────────┐
+              │                             │
+        INBOUND (WA→Hermes)          OUTBOUND (Hermes→WA)
+              │                             │
+              ▼                             ▼
+     ┌─────────────────┐         ┌─────────────────────┐
+     │ Message Listener │         │  Express Server      │
+     │ (client.on msg)  │         │  POST /send endpoint │
+     └────────┬──────────┘         └──────────┬────────────┘
+              │                                │
+              ▼                                │
+     ┌─────────────────┐                       │
+     │  Filter Layer    │                       │
+     │ (DM/tag/bot-loop)│                       │
+     └────────┬──────────┘                       │
+              │                                │
+              ▼                                │
+     ┌─────────────────┐                       │
+     │  Role Resolver   │                       │
+     │  (flat config)   │                       │
+     └────────┬──────────┘                       │
+              │                                │
+              ▼                                │
+     ┌─────────────────┐                       │
+     │  In-memory Queue │                       │
+     │  (per chat_id)   │                       │
+     └────────┬──────────┘                       │
+              │                                │
+              ▼                                │
+     ┌─────────────────┐                       │
+     │  Hermes Adapter  │                       │
+     │  (axios POST)    │                       │
+     └────────┬──────────┘                       │
+              │                                │
+              ▼                                │
+         Hermes (brain) ◄───────────────────────┘
+        (call balik via /send pas mau reminder dll)
+              │
+              ▼
+     ┌─────────────────┐
+     │ Response Handler │
+     │ (split, reply)   │
+     └────────┬──────────┘
+              │
+              ▼
+         Kirim ke WA
 ```
 
-## Jalanin Bot
-
-### Start Bridge (WA Listener)
-
-```bash
-node bridge.js
+ada 2 opsi, dm ataupun grup
+```
+User DM bot
+   │
+   ▼
+isGroup? NO
+   │
+   ▼
+contact.isMe / isStatus? → kalau ya, drop
+   │
+   ▼
+resolveRole(number) → owner/member/guest
+   │
+   ▼
+guest? → reply "belum terdaftar", stop
+   │
+   ▼
+enqueue(chat_id, task)
+   │
+   ▼
+sendStateTyping() + delay 1-2s
+   │
+   ▼
+callHermes({source: "whatsapp", chat_type: "dm", sender, role, message})
+   │
+   ▼
+reply ke user (split kalau >4096 char)
 ```
 
-Atau pakai tmux biar jalan di background:
-
-```bash
-./start_bridge.sh
+```
+Pesan masuk di grup
+   │
+   ▼
+botId ada di message.mentionedIds? NO → drop, ga proses apa-apa
+   │
+  YES
+   ▼
+sender adalah bot lain? → drop (anti loop)
+   │
+   ▼
+strip mention text ("@Hermes ..." → "...")
+   │
+   ▼
+resolveRole(number) berdasar nomor pengirim
+   │
+   ▼
+isAllowed(role, message)? NO → reply "ga punya akses", stop
+   │
+  YES
+   ▼
+enqueue(chat_id, task)
+   │
+   ▼
+typing + delay
+   │
+   ▼
+callHermes({chat_type: "group", chat_name, sender_name, role, message})
+   │
+   ▼
+message.reply() — quoted reply ke pesan yang nge-tag
 ```
 
-**Pertama kali jalan:** QR code muncul di terminal. Scan pakai WA → ⋮ (3 titik) → Linked Devices → Link a Device.
-
-Setelah scan berhasil, session disimpan di `.wwebjs_auth/` dan gak perlu scan ulang (kecuali expired ~14 hari).
-
-### Start Processor (Cron Job)
-
-Tambahkan cron job:
-
-```bash
-crontab -e
+Outbound — Hermes push (reminder dll)
+```
+Hermes (cron internal dia) decide "saatnya kirim"
+   │
+   ▼
+POST ke Gateway /send
+   { chat_id, message }
+   header: x-hermes-secret
+   │
+   ▼
+Gateway validasi secret
+   │
+   ▼
+client.sendMessage(chat_id, message)
+   │
+   ▼
+return { success: true }
 ```
 
-Tambah baris:
-
+### Struktur folder
 ```
-*/2 * * * * cd /path/to/waBotAssistant && python3 wa_processor.py >> /tmp/wa_processor.log 2>&1
+hermes-wa-gateway/
+├── src/
+│   ├── wa/
+│   │   ├── client.ts        # init whatsapp-web.js + LocalAuth + event QR
+│   │   ├── filters.ts        # isGroupTagged(), isBotLoop(), stripMention()
+│   │   └── reply.ts          # splitLongMessage(), sendReply()
+│   │
+│   ├── auth/
+│   │   ├── roles.ts          # ROLES config (flat object)
+│   │   └── permissions.ts    # resolveRole(), isAllowed()
+│   │
+│   ├── hermes/
+│   │   ├── adapter.ts        # callHermes() — axios POST ke Hermes
+│   │   └── types.ts          # HermesPayload, HermesResponse interface
+│   │
+│   ├── queue/
+│   │   └── messageQueue.ts   # enqueue() — Map<chatId, Promise>
+│   │
+│   ├── server/
+│   │   └── pushEndpoint.ts   # Express app, POST /send
+│   │
+│   ├── config/
+│   │   └── env.ts            # load & validate .env vars
+│   │
+│   └── index.ts              # wiring: start WA client + start Express server
+│
+├── .env
+├── .env.example
+├── package.json
+├── tsconfig.json
+└── .gitignore                # wajib ignore .wwebjs_auth/ (session data)
 ```
-
-Atau jalanin manual buat testing:
-
-```bash
-python3 wa_processor.py
-```
-
-## Perintah Bot
-
-Semua perintah dipanggil dengan mention `@aii` di grup:
-
-| Perintah | Fungsi |
-|----------|--------|
-| `@aii help` | Lihat daftar perintah |
-| `@aii catet [pesan]` | Catat informasi ke notes grup |
-| `@aii notes` | Baca catatan grup |
-| `@aii task Nama \| LIST_ID \| priority` | Buat task ClickUp |
-| `@aii cari task [keyword]` | Search task ClickUp |
-| `@aii cek task [ID]` | Detail task |
-| `@aii update [ID] ke [Status]` | Update status task |
-| `@aii reminder [waktu] [pesan]` | Set reminder (coming soon) |
-| `@aii ringkas` | Ringkasan chat (coming soon) |
-
-## Troubleshooting
-
-### QR gak muncul
-- Cek `CHROME_PATH` udah bener
-- Pastikan Chromium bisa jalan di environment lo
-- Hapus `.wwebjs_auth/` dan restart bridge
-
-### Bot gak bales
-- Pastikan `wa_processor.py` jalan (cek cron atau jalanin manual)
-- Cek `~/.hermes/profiles/sekkha_puggala/wa_queue/inbox.json` — ada pesan masuk?
-- Cek `outbox.json` — ada reply yang nunggu dikirim?
-
-### Session expired / harus scan ulang
-- Hapus folder `.wwebjs_auth/` lalu restart bridge
-- Scan QR lagi
-
-### Log "SKIP DM from status@broadcast"
-- Normal. Itu WA status updates yang di-filter. Bot cuma proses pesan grup.
-
-## File Structure
-
-```
-waBotAssistant/
-├── bridge.js          # WA listener (Node.js)
-├── wa_processor.py    # Command processor (Python)
-├── package.json       # Node dependencies
-├── start_bridge.sh    # Helper script buat tmux
-├── .gitignore
-├── .wwebjs_auth/      # (gitignored) WA session data
-├── qr.txt             # (gitignored) Last QR code
-└── qr.png             # (gitignored) Last QR image
-```
-
-## Known Issues
-
-- Fitur `reminder` masih placeholder, belum ada scheduler
-- Fitur `ringkas` (summarize) belum diimplementasi
-- Bot hanya proses pesan text, media belum disupport

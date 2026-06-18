@@ -1,22 +1,6 @@
-# Dependencies
-node_modules/
-
-# WA session (JANGAN PUSH - bisa diakses orang lain)
+.env
+.kiro
+node_modules
+dist/
 .wwebjs_auth/
-
-# QR codes
-qr.txt
-qr.png
-
-# Runtime queue files
-inbox.json
-outbox.json
-outbox_sent.json
-
-# Logs
-*.log
-/tmp/
-
-# OS files
-.DS_Store
-Thumbs.db
+.wwebjs_cache/
