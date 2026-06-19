@@ -50,6 +50,16 @@ async function main() {
 
                 try {
                     const contact = await message.getContact();
+
+                    // Ambil quoted message kalau ada (pesan yang di-reply)
+                    let messageText = result.cleanedBody;
+                    if (message.hasQuotedMsg) {
+                        const quoted = await message.getQuotedMessage();
+                        const quotedContact = await quoted.getContact();
+                        const quotedName = quotedContact.pushname || quotedContact.name || 'Unknown';
+                        messageText = `[Replying to ${quotedName}: "${quoted.body.slice(0, 500)}"]\n\n${messageText}`;
+                    }
+
                     const payload: HermesPayload = {
                         source: 'whatsapp',
                         chat_type: 'group',
@@ -58,7 +68,7 @@ async function main() {
                         sender: senderNumber,
                         sender_name: contact.pushname || contact.name || senderNumber,
                         role,
-                        message: result.cleanedBody,
+                        message: messageText,
                     };
 
                     const response = await callHermes(payload);
@@ -86,13 +96,20 @@ async function main() {
                 const stopTyping = startTypingLoop(chat);
 
                 try {
+                    // Ambil quoted message kalau ada
+                    let messageText = message.body;
+                    if (message.hasQuotedMsg) {
+                        const quoted = await message.getQuotedMessage();
+                        messageText = `[Replying to: "${quoted.body.slice(0, 500)}"]\n\n${messageText}`;
+                    }
+
                     const payload: HermesPayload = {
                         source: 'whatsapp',
                         chat_type: 'dm',
                         chat_id: chat.id._serialized,
                         sender: senderNumber,
                         role,
-                        message: message.body,
+                        message: messageText,
                     };
 
                     const response = await callHermes(payload);
