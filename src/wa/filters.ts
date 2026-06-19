@@ -2,18 +2,20 @@ import { Message } from "whatsapp-web.js"
 import { RoleConfig } from "../auth/roles";
 
 /**
- * drop kalau pesan bot sendiri, dari broadcast, dan bukan dari owner
- * 
- * @param message 
- * @returns 
+ * DM filter — drop kalau:
+ * - bot sendiri
+ * - status broadcast
+ * - bukan owner DAN bukan member (guest = drop)
  */
 export function shouldProcessDM(message: Message, roleConfig: RoleConfig) {
     if (message.fromMe) return false;
     if (message.from === 'status@broadcast') return false;
     
-    const senderNumber = message.from.replace('@c.us', '');
-    if (!roleConfig.owners.has(senderNumber)) return false
-    return true;
+    const senderNumber = message.from.replace(/@(c\.us|lid)$/, '');
+    // Allow owner dan member, drop guest
+    if (roleConfig.owners.has(senderNumber)) return true;
+    if (roleConfig.members.has(senderNumber)) return true;
+    return false;
 }
 
 export function isBotLoop(message: Message) {

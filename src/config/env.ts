@@ -8,6 +8,7 @@ export interface AppConfig {
     expressPort: number;
     ownerNumbers: string[];
     memberNumbers: string[];
+    allowedGroups: string[];
 }
 
 export function loadConfig(): AppConfig {
@@ -32,5 +33,6 @@ export function loadConfig(): AppConfig {
         expressPort: parseInt(process.env.EXPRESS_PORT!, 10) || 3001,
         ownerNumbers: process.env.OWNER_NUMBERS!.split(',').map(n => n.trim()),
         memberNumbers: process.env.MEMBER_NUMBERS?.split(',').map(n => n.trim()) || [],
+        allowedGroups: process.env.ALLOWED_GROUPS?.split(',').map(g => g.trim()) || [],
     };
 }

@@ -1,5 +1,28 @@
 import { Chat, Message } from "whatsapp-web.js";
 
+/**
+ * Start typing loop — refresh typing indicator tiap 20 detik.
+ * Return function buat stop loop.
+ */
+export function startTypingLoop(chat: Chat): () => void {
+    let active = true;
+
+    const loop = async () => {
+        while (active) {
+            try {
+                await chat.sendStateTyping();
+            } catch {
+                // ignore typing errors
+            }
+            // WA typing expires ~25s, refresh tiap 20s
+            await new Promise(resolve => setTimeout(resolve, 20000));
+        }
+    };
+
+    loop();
+    return () => { active = false; };
+}
+
 export function splitMessage(text: string, maxLength: number = 2000): string[] {
     if (text.length <= maxLength) return [text];
 
