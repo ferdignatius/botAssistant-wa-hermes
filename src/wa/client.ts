@@ -23,8 +23,7 @@ const client = new Client({
             '--disable-gpu',
             '--disable-extensions',
             '--disable-software-rasterizer',
-            '--no-zygote',
-            '--single-process',         // stabilitas di environment tanpa display
+            '--no-zygote',              // stabilitas di environment tanpa display
             '--disable-background-networking',
             '--disable-default-apps',
             '--disable-sync',

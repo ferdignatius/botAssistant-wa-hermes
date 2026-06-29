@@ -1,0 +1,29 @@
+# ── Node.js ──────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+
+# ── Build output (di-copy dari builder stage, bukan dari host) ───────────────
+dist/
+build/
+
+# ── Environment & Secrets (JANGAN masuk ke Docker build context) ─────────────
+.env
+.env.*
+!.env.example   # exception: .env.example boleh (tidak mengandung secret)
+
+# ── WhatsApp session (mount via named volume, bukan copy) ────────────────────
+.wwebjs_auth/
+.wwebjs_cache/
+
+# ── Git & IDE ────────────────────────────────────────────────────────────────
+.git/
+.gitignore
+.vscode/
+.idea/
+.kiro/
+
+# ── Docs & misc ──────────────────────────────────────────────────────────────
+README.md
+*.md
+nginx.conf
+wa_processor.py
