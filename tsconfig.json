@@ -4,12 +4,11 @@
     "module": "commonjs",
     "strict": true,
     "outDir": "dist",
-    "rootDir": "src",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "prisma.config.ts", "prisma/seed.ts"],
   "exclude": ["node_modules", "dist"]
 }

@@ -1,0 +1,14 @@
+# Hermes Agent Configuration — sekkha_puggala profile
+
+memory:
+  memory_enabled: false
+  user_profile_enabled: false
+
+platforms:
+  api_server:
+    enabled: true
+    key: nfVDGEFXfLFzPwziwcLYrvFnLAWnVPqP
+    port: 8642
+    # Hanya izinkan tools yang aman
+    # terminal, file, code_execution, memory, session_search, delegation, cronjob — DINONAKTIFKAN
+    toolsets: [web, search, image_gen, tts, messaging, skills]

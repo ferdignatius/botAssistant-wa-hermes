@@ -1,46 +1,38 @@
-import { Message } from "whatsapp-web.js"
-import { RoleConfig } from "../auth/roles";
+import { Message } from "whatsapp-web.js";
 
 /**
- * DM filter — drop kalau:
- * - bot sendiri
- * - status broadcast
- * - bukan owner DAN bukan member (guest = drop)
+ * DM filter — hanya drop kalau:
+ * - Pesan dari bot sendiri (fromMe)
+ * - Status broadcast
+ * - Tipe data bukan string
+ *
+ * Role check (hanya owner yang diizinkan) dilakukan di index.ts via Prisma DB query.
  */
-export function shouldProcessDM(message: Message, roleConfig: RoleConfig) {
+export function shouldProcessDM(message: Message): boolean {
     if (message.fromMe) return false;
     if (message.from === 'status@broadcast') return false;
-    
-    const senderNumber = message.from.replace(/@(c\.us|lid)$/, '');
-    // Allow owner dan member, drop guest
-    if (roleConfig.owners.has(senderNumber)) return true;
-    if (roleConfig.members.has(senderNumber)) return true;
-    return false;
-}
-
-export function isBotLoop(message: Message) {
-    return message.fromMe;
+    if (typeof message.body !== 'string') return false;
+    return true;
 }
 
 /**
- * Hapus #aii tag dari body pesan
+ * Group filter — proses hanya kalau ada #aii di pesan.
+ * Anti-loop: drop jika fromMe.
  */
-export function stripTag(body: string): string {
-    return body.replace(/#aii\s*/gi, '').trim();
-}
+export function shouldProcessGroup(
+    message: Message,
+    _botId: string
+): { process: boolean; cleanedBody: string } {
+    // Anti bot-loop
+    if (message.fromMe) return { process: false, cleanedBody: '' };
 
-// group — proses hanya kalau ada #aii di pesan
-export function shouldProcessGroup(message: Message, botId: string) : {process: boolean, cleanedBody: string} {
+    // Proteksi tipe data body
+    if (typeof message.body !== 'string') return { process: false, cleanedBody: '' };
+
     const hasHashtag = /#aii\b/i.test(message.body);
+    if (!hasHashtag) return { process: false, cleanedBody: '' };
 
-    if (!hasHashtag) {
-        return { process: false, cleanedBody: '' };
-    }
-
-    if (isBotLoop(message)) {
-        return { process: false, cleanedBody: '' };
-    }
-
-    const cleanedBody = stripTag(message.body);
+    // Hapus #aii dari body sebelum dikirim ke Hermes
+    const cleanedBody = message.body.replace(/#aii\s*/gi, '').trim();
     return { process: true, cleanedBody };
 }

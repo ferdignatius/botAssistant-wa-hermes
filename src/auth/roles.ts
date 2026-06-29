@@ -1,15 +1,4 @@
-import { AppConfig } from "../config/env";
-
-export type Role = 'owner' | 'member' | 'guest';
-
-export interface RoleConfig {
-    owners: Set<string>;
-    members: Set<string>;
-}
-
-export function buildRoleConfig(config: AppConfig): RoleConfig {
-    return {
-        owners: new Set(config.ownerNumbers),
-        members: new Set(config.memberNumbers),
-    };
-}
+// Role type untuk WA Gateway — hanya owner dan member.
+// Guest tidak ada — nomor yang tidak terdaftar di DB langsung diabaikan.
+// Data role disimpan di PostgreSQL via Prisma (model User).
+export type Role = 'owner' | 'member';

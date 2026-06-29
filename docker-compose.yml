@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # ── PostgreSQL Database ──────────────────────────────────────────────────
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: wagateway-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-wagateway}
+    ports:
+      - "127.0.0.1:5432:5432"  # hanya listen di localhost, jangan expose ke publik
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-wagateway}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── WA Gateway (Node.js + Chromium) ─────────────────────────────────────
+  wa-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wagateway-app
+    ports:
+      - "127.0.0.1:3001:3001"  # hanya listen di localhost — Nginx yang expose ke publik
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-changeme}@postgres-db:5432/${POSTGRES_DB:-wagateway}?schema=public"
+      HERMES_API_URL: ${HERMES_API_URL}
+      HERMES_API_KEY: ${HERMES_API_KEY}
+      HERMES_SECRET: ${HERMES_SECRET}
+      EXPRESS_PORT: 3001
+      JWT_SECRET: ${JWT_SECRET}
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:3000}
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    volumes:
+      - wa_auth:/app/.wwebjs_auth       # Persist WA session agar tidak perlu scan ulang
+      - wa_cache:/app/.wwebjs_cache     # Persist WA web version cache
+    restart: unless-stopped
+    # Batasi memory agar tidak crash server jika Chromium leak
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+        reservations:
+          memory: 512M
+
+  # ── Hermes Agent ─────────────────────────────────────────────────────────
+  hermes-agent:
+    image: nikolaik/python-nodejs:python3.11-nodejs20
+    container_name: wagateway-hermes
+    ports:
+      - "127.0.0.1:8642:8642"
+    volumes:
+      - hermes_sessions:/root/.hermes/profiles/sekkha_puggala/sessions
+      - ./config.yaml:/root/.hermes/profiles/sekkha_puggala/config.yaml:ro
+    entrypoint: >
+      bash -c "
+        curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash &&
+        hermes -p sekkha_puggala gateway run --replace
+      "
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+    name: wagateway-pgdata
+  wa_auth:
+    name: wagateway-wa-auth
+  wa_cache:
+    name: wagateway-wa-cache
+  hermes_sessions:
+    name: wagateway-hermes-sessions

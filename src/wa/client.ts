@@ -1,61 +1,93 @@
 import { Client, LocalAuth } from "whatsapp-web.js";
 import qrcode from 'qrcode-terminal';
+import { broadcast } from '../server/wsServer';
+import { setWaStatus } from '../server/adminRouter';
+
+// Static Desktop Chrome userAgent — mencegah fingerprinting/ban
+const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 const client = new Client({
-    authStrategy: new LocalAuth(),
+    authStrategy: new LocalAuth({
+        dataPath: './.wwebjs_auth',
+    }),
     puppeteer: {
+        // executablePath: path Chromium di Ubuntu Docker, fallback ke env var untuk dev lokal
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
         handleSIGINT: false,
         handleSIGTERM: false,
         handleSIGHUP: false,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',  // penting di Docker
+            '--disable-gpu',
+            '--disable-extensions',
+            '--disable-software-rasterizer',
+            '--no-zygote',
+            '--single-process',         // stabilitas di environment tanpa display
+            '--disable-background-networking',
+            '--disable-default-apps',
+            '--disable-sync',
+            '--no-first-run',
+            '--mute-audio',
+            '--disable-accelerated-2d-canvas',
+        ],
     },
+    webVersionCache: {
+        type: 'local',
+    },
+    userAgent: DESKTOP_UA,
 });
 
-export async function initClient(maxRetries: number = 3): Promise<void> {
+export async function initClient(maxRetries: number = 5): Promise<void> {
     client.on('qr', (qr) => {
-        console.log('Scan QR code:');
+        console.log('[WA] QR Code generated — waiting for scan...');
         qrcode.generate(qr, { small: true });
+        setWaStatus('qr');
+        broadcast({ type: 'qr', data: qr });
+        broadcast({ type: 'status', data: 'qr' });
     });
 
     client.on('ready', () => {
-        console.log('WA Client ready!');
+        console.log('[WA] Client ready!');
+        setWaStatus('connected');
+        broadcast({ type: 'status', data: 'connected' });
     });
 
     client.on('auth_failure', (err) => {
-        console.error('Auth failure:', err);
+        console.error('[WA] Auth failure:', err);
+        setWaStatus('disconnected');
+        broadcast({ type: 'status', data: 'auth_failure' });
         process.exit(1);
     });
 
     client.on('disconnected', (reason) => {
-        console.error('WA Client disconnected:', reason);
-        console.log('Reconnecting in 5s...');
+        console.error('[WA] Client disconnected:', reason);
+        setWaStatus('disconnected');
+        broadcast({ type: 'status', data: 'disconnected' });
+        console.log('[WA] Reconnecting in 5s...');
         setTimeout(() => {
             client.initialize().catch(e => {
-                console.error('Reconnect failed:', e.message);
+                console.error('[WA] Reconnect failed:', e.message);
             });
         }, 5000);
     });
 
-    // Retry initialize — WA Web sering reload page saat startup
+    // Retry initialize — WA Web kadang reload page saat startup
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             await client.initialize();
-            return; // success
+            return; // sukses
         } catch (err: any) {
-            const isNavigationError =
+            const isRecoverable =
                 err.message?.includes('Execution context was destroyed') ||
-                err.message?.includes('Protocol error');
-
-            const isBrowserRunning =
+                err.message?.includes('Protocol error') ||
                 err.message?.includes('browser is already running');
 
-            if (isBrowserRunning) {
-                // Kill orphan chrome processes sebelum retry
-                console.warn(`[WA] Browser still running, destroying and retrying in 5s...`);
+            if (isRecoverable && attempt < maxRetries) {
+                console.warn(`[WA] Init attempt ${attempt}/${maxRetries} failed, retrying in 10s...`);
                 try { await client.destroy(); } catch { /* ignore */ }
-                await new Promise(resolve => setTimeout(resolve, 5000));
-            } else if (isNavigationError && attempt < maxRetries) {
-                console.warn(`[WA] Init attempt ${attempt} failed (page navigation), retrying in 5s...`);
-                await new Promise(resolve => setTimeout(resolve, 5000));
+                await new Promise(resolve => setTimeout(resolve, 10000));
             } else {
                 throw err;
             }
@@ -63,14 +95,16 @@ export async function initClient(maxRetries: number = 3): Promise<void> {
     }
 }
 
-// Catch unhandled puppeteer/navigation errors supaya app ga crash di runtime
+// Catch unhandled Puppeteer/navigation errors agar app tidak crash di runtime
 process.on('unhandledRejection', (reason: any) => {
-    if (reason?.message?.includes('Execution context was destroyed') ||
+    if (
+        reason?.message?.includes('Execution context was destroyed') ||
         reason?.message?.includes('Protocol error') ||
-        reason?.message?.includes('navigation')) {
+        reason?.message?.includes('navigation')
+    ) {
         console.warn('[WA] Page navigated, ignoring error');
     } else {
-        console.error('Unhandled rejection:', reason);
+        console.error('[WA] Unhandled rejection:', reason);
     }
 });
 

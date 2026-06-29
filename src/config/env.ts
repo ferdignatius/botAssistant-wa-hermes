@@ -6,9 +6,8 @@ export interface AppConfig {
     hermesApiKey: string;
     hermesSecret: string;
     expressPort: number;
-    ownerNumbers: string[];
-    memberNumbers: string[];
-    allowedGroups: string[];
+    jwtSecret: string;
+    allowedOrigin: string;
 }
 
 export function loadConfig(): AppConfig {
@@ -17,7 +16,8 @@ export function loadConfig(): AppConfig {
         'HERMES_API_KEY',
         'HERMES_SECRET',
         'EXPRESS_PORT',
-        'OWNER_NUMBERS',
+        'JWT_SECRET',
+        'DATABASE_URL',
     ];
 
     for (const key of required) {
@@ -31,8 +31,7 @@ export function loadConfig(): AppConfig {
         hermesApiKey: process.env.HERMES_API_KEY!,
         hermesSecret: process.env.HERMES_SECRET!,
         expressPort: parseInt(process.env.EXPRESS_PORT!, 10) || 3001,
-        ownerNumbers: process.env.OWNER_NUMBERS!.split(',').map(n => n.trim()),
-        memberNumbers: process.env.MEMBER_NUMBERS?.split(',').map(n => n.trim()) || [],
-        allowedGroups: process.env.ALLOWED_GROUPS?.split(',').map(g => g.trim()) || [],
+        jwtSecret: process.env.JWT_SECRET!,
+        allowedOrigin: process.env.ALLOWED_ORIGIN || 'http://localhost:3000',
     };
 }

@@ -7,7 +7,7 @@ export interface HermesPayload {
     chat_name?: string;
     sender: string;
     sender_name?: string;
-    role: Role;
+    role: 'owner' | 'member';
     message: string;
 }
 

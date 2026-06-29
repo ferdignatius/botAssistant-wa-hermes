@@ -1,172 +1,221 @@
-# Gateway Wa with Hermes
-```
-┌─────────────────────────────────────────────────────────┐
-│                      WA Number (Bot)                       │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-                     whatsapp-web.js
-                    (session via LocalAuth)
-                            │
-              ┌─────────────┴──────────────┐
-              │                             │
-        INBOUND (WA→Hermes)          OUTBOUND (Hermes→WA)
-              │                             │
-              ▼                             ▼
-     ┌─────────────────┐         ┌─────────────────────┐
-     │ Message Listener │         │  Express Server      │
-     │ (client.on msg)  │         │  POST /send endpoint │
-     └────────┬──────────┘         └──────────┬────────────┘
-              │                                │
-              ▼                                │
-     ┌─────────────────┐                       │
-     │  Filter Layer    │                       │
-     │ (DM/tag/bot-loop)│                       │
-     └────────┬──────────┘                       │
-              │                                │
-              ▼                                │
-     ┌─────────────────┐                       │
-     │  Role Resolver   │                       │
-     │  (flat config)   │                       │
-     └────────┬──────────┘                       │
-              │                                │
-              ▼                                │
-     ┌─────────────────┐                       │
-     │  In-memory Queue │                       │
-     │  (per chat_id)   │                       │
-     └────────┬──────────┘                       │
-              │                                │
-              ▼                                │
-     ┌─────────────────┐                       │
-     │  Hermes Adapter  │                       │
-     │  (axios POST)    │                       │
-     └────────┬──────────┘                       │
-              │                                │
-              ▼                                │
-         Hermes (brain) ◄───────────────────────┘
-        (call balik via /send pas mau reminder dll)
-              │
-              ▼
-     ┌─────────────────┐
-     │ Response Handler │
-     │ (split, reply)   │
-     └────────┬──────────┘
-              │
-              ▼
-         Kirim ke WA
-```
+# WA Bot Assistant (Hermes + WA Gateway + Admin Panel)
 
-ada 2 opsi, dm ataupun grup
-```
-User DM bot
-   │
-   ▼
-isGroup? NO
-   │
-   ▼
-contact.isMe / isStatus? → kalau ya, drop
-   │
-   ▼
-resolveRole(number) → owner/member/guest
-   │
-   ▼
-guest? → reply "belum terdaftar", stop
-   │
-   ▼
-enqueue(chat_id, task)
-   │
-   ▼
-sendStateTyping() + delay 1-2s
-   │
-   ▼
-callHermes({source: "whatsapp", chat_type: "dm", sender, role, message})
-   │
-   ▼
-reply ke user (split kalau >4096 char)
-```
+Aplikasi WhatsApp Bot Assistant yang terintegrasi dengan **Hermes Agent AI** (menggunakan Responses API), database **PostgreSQL via Prisma**, dan dilengkapi dengan **Next.js Web Admin Panel** untuk manajemen user, monitoring log, dan status koneksi WhatsApp.
+
+---
+
+## 🏗️ Arsitektur Sistem & Aliran Data (Flow)
 
 ```
-Pesan masuk di grup
-   │
-   ▼
-botId ada di message.mentionedIds? NO → drop, ga proses apa-apa
-   │
-  YES
-   ▼
-sender adalah bot lain? → drop (anti loop)
-   │
-   ▼
-strip mention text ("@Hermes ..." → "...")
-   │
-   ▼
-resolveRole(number) berdasar nomor pengirim
-   │
-   ▼
-isAllowed(role, message)? NO → reply "ga punya akses", stop
-   │
-  YES
-   ▼
-enqueue(chat_id, task)
-   │
-   ▼
-typing + delay
-   │
-   ▼
-callHermes({chat_type: "group", chat_name, sender_name, role, message})
-   │
-   ▼
-message.reply() — quoted reply ke pesan yang nge-tag
+                       ┌────────────────────────┐
+                       │   WhatsApp Client      │
+                       │ (whatsapp-web.js Auth) │
+                       └───────────┬────────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │                             │
+          INBOUND (WA → Bot)             OUTBOUND (Hermes → WA)
+                    │                             │
+                    ▼                             ▼
+        ┌───────────────────────┐     ┌───────────────────────┐
+        │   Message Listener    │     │    Express Server     │
+        │   (client.on msg)     │     │  (POST /send endpoint)│
+        └───────────┬───────────┘     └───────────┬───────────┘
+                    │                             │
+                    ▼                             │
+        ┌───────────────────────┐                 │
+        │     Filter Layer      │                 │
+        │ (DM/tag/bot-loop/#aii)│                 │
+        └───────────┬───────────┘                 │
+                    │                             │
+                    ▼                             │
+        ┌───────────────────────┐                 │
+        │     Role Resolver     │                 │
+        │ (Prisma DB Lookup)    │                 │
+        └───────────┬───────────┘                 │
+                    │                             │
+                    ▼                             │
+        ┌───────────────────────┐                 │
+        │   In-Memory Queue     │                 │
+        │ (Sequential processing│                 │
+        │     per Chat ID)      │                 │
+        └───────────┬───────────┘                 │
+                    │                             │
+                    ▼                             ▼
+        ┌───────────────────────┐     ┌───────────────────────┐
+        │    Hermes Adapter     │     │      Admin Panel      │
+        │ (POST to Hermes API   │◄────┤     (Next.js 16)      │
+        │ + System Instruction) │     │ (WS Status & REST API)│
+        └───────────┬───────────┘     └───────────────────────┘
+                    │
+                    ▼
+          ┌───────────────────┐
+          │ Kirim Balasan /   │
+          │  Quoted Message   │
+          └───────────────────┘
 ```
 
-Outbound — Hermes push (reminder dll)
-```
-Hermes (cron internal dia) decide "saatnya kirim"
-   │
-   ▼
-POST ke Gateway /send
-   { chat_id, message }
-   header: x-hermes-secret
-   │
-   ▼
-Gateway validasi secret
-   │
-   ▼
-client.sendMessage(chat_id, message)
-   │
-   ▼
-return { success: true }
-```
+### 1. Inbound Message Flow (DM & Group)
 
-### Struktur folder
+Setiap ada pesan masuk, bot akan memprosesnya berdasarkan tipe chat:
+
+#### **A. Direct Message (DM) Flow**
+1. Pesan diterima oleh WA Client.
+2. Filter checking: Pesan diabaikan jika berasal dari bot itu sendiri (`fromMe`) atau broadcast status (`status@broadcast`).
+3. **Role Resolution**: Bot mencari nomor pengirim di tabel `User` (PostgreSQL).
+   - **Jika nomor TIDAK terdaftar**: Chat langsung **didrop** (diabaikan sepenuhnya, tidak ada akses guest).
+   - **Jika nomor terdaftar**: Mendapatkan role (`owner` atau `member`).
+4. Memasukkan pemrosesan ke **In-memory Queue** berdasarkan `chat_id` agar pesan diproses berurutan (mencegah double reply).
+5. Bot memicu indikator mengetik (`sendStateTyping`) secara otomatis.
+6. Bot mengirim request ke API Hermes dengan payload yang menyertakan data pengirim, tipe chat, role pengirim, dan system prompt yang mendikte batasan role.
+7. Setelah Hermes membalas, bot mengirim pesan balasan ke pengguna dengan behavior delay manusiawi (1.5s - 4s) dan membagi pesan jika melebihi 2000 karakter.
+8. Menyimpan percakapan ke tabel `ActivityLog` di database.
+
+#### **B. Group Chat Flow**
+1. Pesan diterima oleh WA Client.
+2. Filter checking: Pesan diabaikan jika berasal dari bot itu sendiri (`fromMe`).
+3. Bot memeriksa apakah pesan mengandung tag `#aii` (case-insensitive). Jika tidak, pesan didrop.
+4. Bot membersihkan tag `#aii` dari isi pesan sebelum dikirim ke Hermes.
+5. **Role Resolution**: Bot mencari nomor pengirim di database. Jika pengirim tidak terdaftar di DB, pesan langsung didrop.
+6. Memasukkan pemrosesan ke antrean (`enqueue`).
+7. Bot memicu indikator mengetik, menyusun instruksi context (termasuk quoted message jika membalas pesan lain).
+8. Mengirim data ke Hermes.
+9. Setelah menerima jawaban, bot mengirimkannya sebagai **quoted reply** ke pengirim asli dalam grup.
+10. Menyimpan percakapan ke tabel `ActivityLog`.
+
+---
+
+### 2. Outbound Message Flow (Push Notification / Reminder)
+
+1. Hermes Agent memutuskan untuk mengirim pesan terjadwal atau notifikasi.
+2. Hermes mengirim request `POST` ke gateway di endpoint `/send`.
+   - Header: `x-hermes-secret` wajib cocok dengan configuration secret.
+   - Body: `{ chat_id, message }`
+3. Gateway memvalidasi token rahasia tersebut.
+4. Gateway mengirimkan pesan ke WhatsApp menggunakan `client.sendMessage(chat_id, message)`.
+
+---
+
+## 🔑 Manajemen Peran & Hak Akses (Access Rights / RBAC)
+
+Sistem menggunakan hak akses berbasis database PostgreSQL. Terdapat dua role utama yang dikirimkan ke Hermes untuk ditegakkan melalui system instruction:
+
+### 👑 1. **OWNER** (Akses Penuh / Full Access)
+* **Kewenangan**: Memiliki kendali mutlak atas bot dan server.
+* **Fitur**:
+  - Boleh melakukan semua perintah tanpa batas.
+  - Boleh mengubah konfigurasi agent secara realtime (system prompt, kepribadian, behavior).
+  - Boleh meminta agent melupakan instruksi sebelumnya (override system).
+  - Boleh melakukan operasi CRUD ke seluruh data.
+  - Memiliki akses penuh ke seluruh tools (web search, image generation, terminal, file system, execution command, dll).
+
+### 👥 2. **MEMBER** (Akses Terbatas / Limited Access)
+* **Kewenangan**: Hanya diizinkan untuk interaksi umum dan penggunaan tools dasar.
+* **Fitur**:
+  - Boleh chat biasa (diskusi, tanya-jawab).
+  - Boleh menggunakan tools umum seperti pencarian web (`web search`), pembuatan gambar (`image generation`), dan teks-ke-suara (`tts`).
+  - **DILARANG** mengubah konfigurasi agent, kepribadian, atau memodifikasi system prompt.
+  - **DILARANG** mengakses filesystem, terminal, atau menjalankan shell command di server.
+  - **DILARANG** mengunduh, menginstal, atau memodifikasi file apa pun di server.
+  - **Pencegahan**: Prompt sistem secara ketat menginstruksikan Hermes untuk menolak perintah sensitif dari member secara sopan, dan aturan ini kebal terhadap prompt injection.
+
+---
+
+## 🛠️ Fitur Utama Aplikasi
+
+1. **Anti-Ban Human Behavior**: Simulasi delay respons manusiawi (1.5s - 4.0s) sebelum membalas pesan, auto-typing loop, dan split pesan otomatis per baris baru jika melebihi batas karakter agar aman dari deteksi spam WhatsApp.
+2. **Sequential Message Queue**: Menggunakan antrean berbasis `Map` per `chat_id` untuk menghindari tabrakan state (race conditions) saat user mengirim pesan beruntun.
+3. **Database-Driven Users**: Otorisasi user dinamis (CRUD) langsung dari Admin Panel tanpa perlu restart aplikasi gateway.
+4. **WebSocket Real-time Broadcast**: Mengalirkan event status (QR code untuk scan, status koneksi: *connecting, qr, connected, disconnected*) secara langsung ke Admin Panel Web.
+5. **Nginx & Docker Ready**: Dilengkapi dengan konfigurasi Docker Compose multiservice (Database, Gateway App, Hermes Agent) dan Nginx reverse proxy.
+6. **Automatic Log Pruner**: Menghapus baris tabel log aktivitas (`ActivityLog`) yang berusia lebih dari 30 hari setiap 24 jam secara otomatis untuk menghemat ruang penyimpanan.
+
+---
+
+## 📁 Struktur Folder Proyek
+
 ```
-hermes-wa-gateway/
+waBotAssistant/
+├── prisma/
+│   ├── schema.prisma         # Definisi skema database PostgreSQL
+│   └── seed.ts               # Script seeding untuk membuat akun admin default
 ├── src/
-│   ├── wa/
-│   │   ├── client.ts        # init whatsapp-web.js + LocalAuth + event QR
-│   │   ├── filters.ts        # isGroupTagged(), isBotLoop(), stripMention()
-│   │   └── reply.ts          # splitLongMessage(), sendReply()
-│   │
 │   ├── auth/
-│   │   ├── roles.ts          # ROLES config (flat object)
-│   │   └── permissions.ts    # resolveRole(), isAllowed()
-│   │
-│   ├── hermes/
-│   │   ├── adapter.ts        # callHermes() — axios POST ke Hermes
-│   │   └── types.ts          # HermesPayload, HermesResponse interface
-│   │
-│   ├── queue/
-│   │   └── messageQueue.ts   # enqueue() — Map<chatId, Promise>
-│   │
-│   ├── server/
-│   │   └── pushEndpoint.ts   # Express app, POST /send
-│   │
+│   │   └── roles.ts          # Definisi type Role ('owner' | 'member')
 │   ├── config/
-│   │   └── env.ts            # load & validate .env vars
-│   │
-│   └── index.ts              # wiring: start WA client + start Express server
-│
-├── .env
-├── .env.example
-├── package.json
-├── tsconfig.json
-└── .gitignore                # wajib ignore .wwebjs_auth/ (session data)
+│   │   └── env.ts            # Loader & validasi environment variables (.env)
+│   ├── hermes/
+│   │   ├── adapter.ts        # Adapter Responses API & pembentuk prompt instruksi
+│   │   └── types.ts          # Type definition untuk request/response Hermes
+│   ├── lib/
+│   │   └── prisma.ts         # Singleton PrismaClient dengan Postgres Driver Adapter
+│   ├── queue/
+│   │   └── messageQueue.ts   # Mekanisme sequential queue berbasis Map per chat ID
+│   ├── server/
+│   │   ├── adminAuth.ts      # JWT Authentication Middleware untuk Express
+│   │   ├── adminRouter.ts    # REST Endpoint Admin API (Users, Logs, Status)
+│   │   ├── pushEndpoint.ts   # Express server, REST API setup & endpoint /send
+│   │   └── wsServer.ts       # WebSocket server untuk broadcast status koneksi
+│   └── index.ts              # Entry point utama aplikasi (wiring & loop pruner)
+├── wa-admin-panel/           # Dashboard Web Next.js 16 (React, TailwindCSS)
+├── tsconfig.json             # Konfigurasi TypeScript global / IDE
+├── tsconfig.build.json       # Konfigurasi TypeScript khusus untuk production build
+├── docker-compose.yml        # Konfigurasi multi-container Docker
+├── Dockerfile                # Instruksi build container WA Gateway (Puppeteer-friendly)
+└── README.md                 # Dokumentasi proyek
 ```
+
+---
+
+## 🚀 Cara Menjalankan Aplikasi
+
+### 1. Prasyarat (Prerequisites)
+* Node.js v20 atau lebih baru.
+* Database PostgreSQL.
+* Akun WhatsApp untuk scan QR code.
+
+### 2. Setup Environment Variables
+Salin `.env.example` atau `.env.production` menjadi `.env` di root folder dan isi variabel yang diperlukan:
+```env
+DATABASE_URL="postgresql://username:password@localhost:5432/wagateway?schema=public"
+HERMES_API_URL="http://localhost:8642/v1/responses"
+HERMES_API_KEY="your-hermes-api-key"
+HERMES_SECRET="your-push-secret"
+EXPRESS_PORT=3001
+JWT_SECRET="your-long-jwt-secret-key"
+```
+
+### 3. Migrasi Database & Seeding
+Jalankan migrasi Prisma untuk membuat tabel di PostgreSQL dan jalankan seed untuk membuat admin default:
+```bash
+# Migrasi Database
+npx prisma migrate dev
+
+# Jalankan Database Seeding
+npm run db:seed
+```
+*Akun admin default yang dibuat:*
+* Username: `admin`
+* Password: `admin123` *(Segera ganti password Anda setelah berhasil masuk!)*
+
+### 4. Build dan Jalankan Gateway
+```bash
+# Install Dependensi
+npm install
+
+# Jalankan dalam mode Development (dengan nodemon)
+npm run dev
+
+# Jalankan dalam mode Production
+npm run build
+npm start
+```
+
+### 5. Jalankan Admin Panel Web
+Masuk ke direktori dashboard admin, instal dependensi, lalu jalankan development server:
+```bash
+cd wa-admin-panel
+npm install
+npm run dev
+```
+Buka browser di `http://localhost:3000` untuk membuka halaman login, masukkan kredensial admin Anda, dan scan QR Code WhatsApp yang tampil di dashboard untuk mulai mengaktifkan bot!

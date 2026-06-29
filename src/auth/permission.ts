@@ -1,11 +1,4 @@
-import { Role, RoleConfig } from "./roles";
-
-export function resolveRole(phoneNumber: string, roleConfig: RoleConfig): Role {
-    if (roleConfig.owners.has(phoneNumber)) return 'owner';
-    if (roleConfig.members.has(phoneNumber)) return 'member';
-    return 'guest';
-}
-
-export function isAllowed(role: Role): boolean {
-    return role === 'owner' || role === 'member';
-}
+// DEPRECATED — Tidak digunakan lagi.
+// Role resolution sekarang dilakukan via Prisma query di src/index.ts:
+//   const user = await prisma.user.findUnique({ where: { phone: senderNumber } });
+//   if (!user) return; // bukan owner/member, drop
