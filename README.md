@@ -175,7 +175,7 @@ waBotAssistant/
 * Akun WhatsApp untuk scan QR code.
 
 ### 2. Setup Environment Variables
-Salin `.env.example` atau `.env.production` menjadi `.env` di root folder dan isi variabel yang diperlukan:
+Salin `.env.example` menjadi `.env` di root folder dan isi variabel yang diperlukan:
 ```env
 DATABASE_URL="postgresql://username:password@localhost:5432/wagateway?schema=public"
 HERMES_API_URL="http://localhost:8642/v1/responses"
@@ -183,10 +183,14 @@ HERMES_API_KEY="your-hermes-api-key"
 HERMES_SECRET="your-push-secret"
 EXPRESS_PORT=3001
 JWT_SECRET="your-long-jwt-secret-key"
+
+# Kredensial untuk akun admin awal (seeding)
+ADMIN_SEED_USERNAME=admin
+ADMIN_SEED_PASSWORD=admin123
 ```
 
 ### 3. Migrasi Database & Seeding
-Jalankan migrasi Prisma untuk membuat tabel di PostgreSQL dan jalankan seed untuk membuat admin default:
+Jalankan migrasi Prisma untuk membuat tabel di PostgreSQL dan jalankan seed untuk membuat admin default berdasarkan kredensial di `.env`:
 ```bash
 # Migrasi Database
 npx prisma migrate dev
@@ -194,9 +198,7 @@ npx prisma migrate dev
 # Jalankan Database Seeding
 npm run db:seed
 ```
-*Akun admin default yang dibuat:*
-* Username: `admin`
-* Password: `admin123` *(Segera ganti password Anda setelah berhasil masuk!)*
+*Akun admin yang dibuat akan menyesuaikan nilai `ADMIN_SEED_USERNAME` dan `ADMIN_SEED_PASSWORD` di `.env` Anda (bawaan: `admin` / `admin123`).*
 
 ### 4. Build dan Jalankan Gateway
 ```bash
@@ -219,3 +221,35 @@ npm install
 npm run dev
 ```
 Buka browser di `http://localhost:3000` untuk membuka halaman login, masukkan kredensial admin Anda, dan scan QR Code WhatsApp yang tampil di dashboard untuk mulai mengaktifkan bot!
+
+---
+
+## 🔄 Setup CI/CD (GitHub Actions)
+
+Aplikasi ini dilengkapi dengan pipeline CI/CD otomatis pada berkas [.github/workflows/deploy.yml](file:///.github/workflows/deploy.yml) yang akan terpicu ketika ada perubahan yang di-push ke branch `production`.
+
+### 1. Konfigurasi Secrets di GitHub
+Masuk ke repositori GitHub Anda, buka **Settings > Secrets and variables > Actions**, lalu tambahkan Repository Secrets berikut:
+
+* **Docker Hub (Build & Push)**
+  * `DOCKERHUB_USERNAME`: Username akun Docker Hub Anda.
+  * `DOCKERHUB_TOKEN`: Personal Access Token (PAT) dari Docker Hub Anda.
+* **VPS Deploy (SSH)**
+  * `SSH_HOST`: Alamat IP Publik atau Domain server VPS Anda.
+  * `SSH_USERNAME`: Username SSH server Anda (contoh: `root` atau `ubuntu`).
+  * `SSH_KEY`: Private Key SSH Anda (isi dari berkas `id_rsa`).
+  * `SSH_PORT`: Port SSH server Anda (default: `22` jika tidak didefinisikan).
+
+### 2. Penyesuaian Path Server
+Pastikan Anda telah menyesuaikan direktori kerja proyek di server Anda pada berkas [.github/workflows/deploy.yml](file:///.github/workflows/deploy.yml) baris ke-45:
+```yaml
+script: |
+  cd /path/to/your/project-on-server
+```
+Ubah `/path/to/your/project-on-server` dengan path direktori folder proyek Anda di VPS tempat berkas `docker-compose.yml` berada.
+
+### 3. Eksekusi
+Lakukan push perubahan ke branch `production` untuk memulai alur otomatisasi deployment:
+```bash
+git push origin production
+```
