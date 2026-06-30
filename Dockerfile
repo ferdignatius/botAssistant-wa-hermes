@@ -1,5 +1,5 @@
 # ── Stage 1: Build ──────────────────────────────────────────────────────────
-FROM node:22-bullseye-slim AS builder
+FROM node:22-slim AS builder
 
 WORKDIR /app
 
@@ -15,12 +15,12 @@ COPY . .
 RUN npm run build
 
 # ── Stage 2: Production ──────────────────────────────────────────────────────
-FROM node:22-bullseye-slim AS production
+FROM node:22-slim AS production
 
 # Install dumb-init + Chromium
 # (fonts-ipafont-gothic & fonts-wqy-zenhei untuk render emoji/karakter khusus WA)
 # apt secara otomatis menarik seluruh shared libraries Chromium — tidak perlu eksplisit
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends --fix-missing \
     dumb-init \
     chromium \
     fonts-ipafont-gothic \
