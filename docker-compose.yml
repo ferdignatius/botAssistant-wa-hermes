@@ -1,7 +1,7 @@
 services:
   # ── PostgreSQL Database ──────────────────────────────────────────────────
   postgres-db:
-    image: postgres:15-alpine
+    image: postgres:17-alpine
     container_name: wagateway-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-admin}
@@ -22,7 +22,7 @@ services:
   # ── Hermes Agent ─────────────────────────────────────────────────────────
   # Diletakkan sebelum wa-gateway agar depends_on bisa mereferensikannya
   hermes-agent:
-    image: nikolaik/python-nodejs:python3.11-nodejs20
+    image: nikolaik/python-nodejs:python3.12-nodejs22
     container_name: wagateway-hermes
     ports:
       - "127.0.0.1:8689:8689"

@@ -1,5 +1,5 @@
 # ── Stage 1: Build ──────────────────────────────────────────────────────────
-FROM node:18-bullseye-slim AS builder
+FROM node:22-bullseye-slim AS builder
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ COPY . .
 RUN npm run build
 
 # ── Stage 2: Production ──────────────────────────────────────────────────────
-FROM node:18-bullseye-slim AS production
+FROM node:22-bullseye-slim AS production
 
 # Install dumb-init + Chromium
 # (fonts-ipafont-gothic & fonts-wqy-zenhei untuk render emoji/karakter khusus WA)
