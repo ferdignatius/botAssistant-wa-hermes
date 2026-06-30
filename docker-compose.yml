@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       POSTGRES_DB: ${POSTGRES_DB:-wagateway}
     ports:
-      - "127.0.0.1:5433:5432"
+      - "127.0.0.1:5489:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
@@ -25,17 +25,19 @@ services:
     image: nikolaik/python-nodejs:python3.11-nodejs20
     container_name: wagateway-hermes
     ports:
-      - "127.0.0.1:8642:8642"
+      - "127.0.0.1:8689:8689"
     environment:
       API_SERVER_KEY: ${HERMES_API_KEY}
       GATEWAY_ALLOW_ALL_USERS: "true"
       API_SERVER_HOST: "0.0.0.0"
     volumes:
       - hermes_sessions:/root/.hermes/sessions # Global session tanpa profil spesifik
-      - ./config.yaml:/root/.hermes/config.yaml
+      - ./config.yaml:/app/config.yaml
     entrypoint: >
       bash -c "
         pip install --no-cache-dir hermes-agent &&
+        mkdir -p /root/.hermes &&
+        sed \"s/key: YOUR_HERMES_API_KEY/key: $${API_SERVER_KEY}/g\" /app/config.yaml > /root/.hermes/config.yaml &&
         hermes gateway run --replace
       "
     restart: unless-stopped
@@ -47,7 +49,7 @@ services:
       dockerfile: Dockerfile
     container_name: wagateway-app
     ports:
-      - "127.0.0.1:3001:3001"
+      - "127.0.0.1:4849:4849"
     # shm_size DIHAPUS: Chromium dikonfigurasi dengan --disable-dev-shm-usage
     # sehingga Chromium menggunakan /tmp (bukan /dev/shm) — shm_size tidak berpengaruh.
     environment:
@@ -56,7 +58,7 @@ services:
       HERMES_API_URL: ${HERMES_API_URL}
       HERMES_API_KEY: ${HERMES_API_KEY}
       HERMES_SECRET: ${HERMES_SECRET}
-      EXPRESS_PORT: 3001
+      EXPRESS_PORT: 4849
       JWT_SECRET: ${JWT_SECRET}
       ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:3000}
       PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
@@ -71,7 +73,7 @@ services:
     restart: unless-stopped
     healthcheck:
       # Gunakan endpoint /health yang sudah ada di Express app
-      test: [ "CMD-SHELL", "curl -sf http://localhost:3001/health || exit 1" ]
+      test: [ "CMD-SHELL", "curl -sf http://localhost:4849/health || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3

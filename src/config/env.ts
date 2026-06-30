@@ -30,7 +30,7 @@ export function loadConfig(): AppConfig {
         hermesApiUrl: process.env.HERMES_API_URL!,
         hermesApiKey: process.env.HERMES_API_KEY!,
         hermesSecret: process.env.HERMES_SECRET!,
-        expressPort: parseInt(process.env.EXPRESS_PORT!, 10) || 3001,
+        expressPort: parseInt(process.env.EXPRESS_PORT!, 10) || 4849,
         jwtSecret: process.env.JWT_SECRET!,
         allowedOrigin: process.env.ALLOWED_ORIGIN || 'http://localhost:3000',
     };
