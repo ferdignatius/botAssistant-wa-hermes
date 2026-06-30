@@ -34,8 +34,8 @@ export function createWsServer(httpServer: Server): void {
                 clients.delete(ws);
             });
 
-        } catch {
-            console.warn('[WS] Unauthorized connection rejected.');
+        } catch (err: any) {
+            console.warn('[WS] Unauthorized connection rejected:', err.message);
             ws.close(1008, 'Unauthorized');
         }
     });

@@ -16,8 +16,39 @@ export function createExpressApp(client: Client): Express {
     const app = express();
 
     // CORS — hanya izinkan origin dari Admin Panel
+    const allowedOrigins = config.allowedOrigin.split(',').map(o => o.trim());
+
     app.use(cors({
-        origin: config.allowedOrigin,
+        origin: (origin, callback) => {
+            if (!origin) {
+                return callback(null, true);
+            }
+
+            const isAllowed = allowedOrigins.some(allowedOpt => {
+                if (allowedOpt === '*') return true;
+                try {
+                    const allowedUrl = allowedOpt.startsWith('http://') || allowedOpt.startsWith('https://')
+                        ? new URL(allowedOpt)
+                        : null;
+
+                    const requestUrl = new URL(origin);
+
+                    if (allowedUrl) {
+                        return requestUrl.origin === allowedUrl.origin;
+                    } else {
+                        return requestUrl.hostname === allowedOpt || requestUrl.host === allowedOpt;
+                    }
+                } catch {
+                    return origin.includes(allowedOpt);
+                }
+            });
+
+            if (isAllowed) {
+                callback(null, true);
+            } else {
+                callback(null, false);
+            }
+        },
         methods: ['GET', 'POST', 'PATCH', 'DELETE'],
         allowedHeaders: ['Content-Type', 'Authorization', 'x-hermes-secret'],
         credentials: true,

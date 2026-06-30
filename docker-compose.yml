@@ -8,13 +8,13 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       POSTGRES_DB: ${POSTGRES_DB:-wagateway}
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
       # $$ agar Docker Compose tidak menginterpolasi variable dari .env host
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin} -d $${POSTGRES_DB:-wagateway}"]
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin} -d $${POSTGRES_DB:-wagateway}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -26,9 +26,13 @@ services:
     container_name: wagateway-hermes
     ports:
       - "127.0.0.1:8642:8642"
+    environment:
+      API_SERVER_KEY: ${HERMES_API_KEY}
+      GATEWAY_ALLOW_ALL_USERS: "true"
+      API_SERVER_HOST: "0.0.0.0"
     volumes:
-      - hermes_sessions:/root/.hermes/sessions    # Global session tanpa profil spesifik
-      - ./config.yaml:/root/.hermes/config.yaml:ro
+      - hermes_sessions:/root/.hermes/sessions # Global session tanpa profil spesifik
+      - ./config.yaml:/root/.hermes/config.yaml
     entrypoint: >
       bash -c "
         pip install --no-cache-dir hermes-agent &&
@@ -60,18 +64,18 @@ services:
       postgres-db:
         condition: service_healthy
       hermes-agent:
-        condition: service_started  # Hermes tidak punya healthcheck; minimal pastikan container jalan
+        condition: service_started # Hermes tidak punya healthcheck; minimal pastikan container jalan
     volumes:
       - wa_auth:/app/.wwebjs_auth
       - wa_cache:/app/.wwebjs_cache
     restart: unless-stopped
     healthcheck:
       # Gunakan endpoint /health yang sudah ada di Express app
-      test: ["CMD-SHELL", "curl -sf http://localhost:3001/health || exit 1"]
+      test: [ "CMD-SHELL", "curl -sf http://localhost:3001/health || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 90s  # Beri waktu Chromium + WA Client untuk warmup
+      start_period: 90s # Beri waktu Chromium + WA Client untuk warmup
     deploy:
       resources:
         limits:
