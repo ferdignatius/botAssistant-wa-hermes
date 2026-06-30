@@ -554,8 +554,8 @@ _config_version: 30
 platforms:
   api_server:
     enabled: true
-    key: 86d713ccfe3b4fccf555b760d84ff221355cf7f040329bfb
-    port: 8642
+    key: YOUR_HERMES_API_KEY
+    port: 8689
     toolsets:
       - web
       - search

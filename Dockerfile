@@ -68,7 +68,7 @@ RUN chmod +x ./entrypoint.sh
 # Jalankan container dengan user non-root demi keamanan
 USER node
 
-EXPOSE 3001
+EXPOSE 4849
 
 # dumb-init sebagai PID 1 agar Chromium zombie processes dibersihkan
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]

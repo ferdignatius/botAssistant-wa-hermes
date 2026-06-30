@@ -12,21 +12,24 @@ async function main() {
     console.log('🌱 Starting database seed...');
 
     // Buat admin user default
+    const defaultUsername = process.env.ADMIN_SEED_USERNAME || 'admin';
     const defaultPassword = process.env.ADMIN_SEED_PASSWORD || 'admin123';
     const passwordHash = await bcrypt.hash(defaultPassword, 12);
 
     const admin = await prisma.adminUser.upsert({
-        where: { username: 'admin' },
-        update: {},
+        where: { username: defaultUsername },
+        update: {
+            passwordHash, // Pastikan jika password di .env diupdate, password hash di DB juga terupdate
+        },
         create: {
-            username: 'admin',
+            username: defaultUsername,
             passwordHash,
         },
     });
 
     console.log(`✅ Admin user created: ${admin.username}`);
     console.log(`⚠️  Default password: ${defaultPassword}`);
-    console.log(`⚠️  SEGERA ganti password setelah login pertama!`);
+    console.log(`⚠️  Silakan login dengan kredensial di atas!`);
 }
 
 main()
