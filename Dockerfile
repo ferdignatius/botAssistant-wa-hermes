@@ -7,8 +7,8 @@ WORKDIR /app
 RUN npm install -g pnpm
 
 COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
-# Menggunakan pnpm install dengan frozen-lockfile
-RUN pnpm install --frozen-lockfile
+# Menggunakan pnpm install dengan frozen-lockfile dan timeout lebih lama untuk koneksi lambat
+RUN pnpm install --frozen-lockfile --network-timeout 1000000 --fetch-retries 5
 
 COPY prisma ./prisma/
 # Generate Prisma Client di stage builder
@@ -43,7 +43,7 @@ RUN npm install -g pnpm
 
 # Copy package files dan install hanya production dependencies
 COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
-RUN pnpm install --prod --frozen-lockfile
+RUN pnpm install --prod --frozen-lockfile --network-timeout 1000000 --fetch-retries 5
 
 # ── Prisma: Copy engine binaries + client ──────────────────────────────────
 # Salin engine biner yang sudah di-generate di builder (openssl 3.x / bullseye)
