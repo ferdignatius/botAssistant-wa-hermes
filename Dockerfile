@@ -3,16 +3,19 @@ FROM node:22-slim AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
-# Menggunakan npm ci untuk konsistensi lockfile
-RUN npm ci
+# Install pnpm
+RUN npm install -g pnpm
+
+COPY package.json pnpm-lock.yaml* ./
+# Menggunakan pnpm install dengan frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 COPY prisma ./prisma/
 # Generate Prisma Client di stage builder
-RUN npx prisma generate
+RUN pnpm exec prisma generate
 
 COPY . .
-RUN npm run build
+RUN pnpm run build
 
 # ── Stage 2: Production ──────────────────────────────────────────────────────
 FROM node:22-slim AS production
@@ -35,9 +38,12 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
+# Install pnpm
+RUN npm install -g pnpm
+
 # Copy package files dan install hanya production dependencies
-COPY package*.json ./
-RUN npm ci --omit=dev
+COPY package.json pnpm-lock.yaml* ./
+RUN pnpm install --prod --frozen-lockfile
 
 # ── Prisma: Copy engine binaries + client ──────────────────────────────────
 # Salin engine biner yang sudah di-generate di builder (openssl 3.x / bullseye)
