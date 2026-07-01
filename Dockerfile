@@ -6,7 +6,7 @@ WORKDIR /app
 # Install pnpm
 RUN npm install -g pnpm
 
-COPY package.json pnpm-lock.yaml* ./
+COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
 # Menggunakan pnpm install dengan frozen-lockfile
 RUN pnpm install --frozen-lockfile
 
@@ -42,7 +42,7 @@ WORKDIR /app
 RUN npm install -g pnpm
 
 # Copy package files dan install hanya production dependencies
-COPY package.json pnpm-lock.yaml* ./
+COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
 RUN pnpm install --prod --frozen-lockfile
 
 # ── Prisma: Copy engine binaries + client ──────────────────────────────────
