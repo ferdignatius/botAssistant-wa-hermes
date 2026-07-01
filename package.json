@@ -11,9 +11,6 @@
     "db:seed": "ts-node prisma/seed.ts",
     "db:studio": "prisma studio"
   },
-  "prisma": {
-    "seed": "ts-node prisma/seed.ts"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ferdignatius/botAssistant-wa-hermes.git"
