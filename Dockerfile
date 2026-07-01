@@ -50,11 +50,6 @@ RUN pnpm install --prod --frozen-lockfile --config.network-timeout=1000000 --con
 COPY --from=builder /app/node_modules/.prisma        ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 
-# Salin Prisma CLI dari builder agar entrypoint.sh bisa menjalankan
-# `prisma migrate deploy` tanpa perlu prisma di dependencies produksi
-COPY --from=builder /app/node_modules/prisma         ./node_modules/prisma
-COPY --from=builder /app/node_modules/.bin/prisma    ./node_modules/.bin/prisma
-
 # ── App artifacts ──────────────────────────────────────────────────────────
 # Copy hasil compile dan skema database
 COPY --from=builder /app/dist   ./dist
